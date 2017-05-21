@@ -357,6 +357,41 @@ func cmdRemove(args []string) {
 	})
 }
 
+func findBasedir() string {
+	exe := os.Args[0]
+
+	dir, err := filepath.Abs(filepath.Dir(exe))
+	ok(err)
+
+	fi, err := os.Lstat(exe)
+	ok(err)
+
+	if isSymlink(fi) {
+		dir = readlink(exe)
+	}
+
+	for {
+		if filepath.Dir(dir) == dir {
+			warn("unable to find bundles.json\n")
+			os.Exit(1)
+		}
+
+		filename := filepath.Join(dir, "bundles.json")
+		fi, err = os.Stat(filename)
+		if err == nil {
+			v("found basedir: %v\n", dir)
+			return dir
+		}
+
+		if err != nil && os.IsNotExist(err) {
+			dir = filepath.Dir(dir)
+			continue
+		}
+
+		ok(err)
+	}
+}
+
 func main() {
 	var cmd string
 	var args []string
@@ -368,10 +403,7 @@ func main() {
 		args = flag.Args()[1:]
 	}
 
-	var err error
-
-	opts.basedir, err = filepath.Abs(filepath.Join(filepath.Dir(os.Args[0]), ".."))
-	ok(err)
+	opts.basedir = findBasedir()
 
 	switch cmd {
 	case "install":
