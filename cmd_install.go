@@ -164,28 +164,19 @@ func install(moduleName, targetdir string) {
 }
 
 func cleanupBrokenLinks() {
-	v("cleanup broken links\n")
-	for _, fi := range readdir(opts.Target) {
-		if !isSymlink(fi) {
-			continue
-		}
-
-		filename := filepath.Join(opts.Target, fi.Name())
-		target := readlink(filename)
-
-		// make sure we only act on symlinks that we manage
-		if !isSubdir(opts.Base, target) {
-			continue
+	walkOurSymlinks(opts.Base, opts.Target, func(filename, target string, fi os.FileInfo, err error) error {
+		if err != nil {
+			return err
 		}
 
 		// if the target exists, do nothing
 		if exists(target) {
-			continue
+			return nil
 		}
 
 		v("removing broken symlink %v\n", filename)
-		ok(os.Remove(filename))
-	}
+		return os.Remove(filename)
+	})
 }
 
 func runInstall(cmd *cobra.Command, args []string) {

@@ -1,8 +1,10 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -38,22 +40,28 @@ func init() {
 // State contains the state whether a bundle is installed or not.
 type State map[string]bool
 
+func firstdir(dir string) string {
+	dirs := strings.Split(dir, string(filepath.Separator))
+	return dirs[0]
+}
+
 func installedModules() State {
 	state := make(State)
-	for _, fi := range readdir(opts.Target) {
-		if !isSymlink(fi) {
-			continue
+	walkOurSymlinks(opts.Base, opts.Target, func(filename, target string, fi os.FileInfo, err error) error {
+		if err != nil {
+			return err
 		}
 
-		target := readlink(filepath.Join(opts.Target, fi.Name()))
-		if !isSubdir(opts.Base, target) {
-			continue
+		rel, err := filepath.Rel(opts.Base, target)
+		if err != nil {
+			return err
 		}
 
-		module := filepath.Base(filepath.Dir(target))
-		v("module %v, target %v\n", module, target)
+		module := firstdir(rel)
+
 		state[module] = true
-	}
+		return nil
+	})
 
 	return state
 }
