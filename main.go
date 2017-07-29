@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 
 	"github.com/spf13/cobra"
 )
@@ -76,13 +75,7 @@ func ok(err error) {
 		return
 	}
 
-	fmt.Fprintf(os.Stderr, "error: %v\n\nstack trace:\n", err)
-
-	buf := make([]byte, 1<<20)
-	l := runtime.Stack(buf, false)
-	buf = buf[:l]
-	fmt.Fprintf(os.Stderr, "%s", buf)
-
+	fmt.Fprintf(os.Stderr, "error: %+v\n", err)
 	os.Exit(1)
 }
 
