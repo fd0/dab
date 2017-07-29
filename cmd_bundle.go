@@ -2,12 +2,13 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -17,21 +18,16 @@ var cmdBundle = &cobra.Command{
 }
 
 var cmdBundleAdd = &cobra.Command{
-	Use:   "add",
+	Use:   "add DIR SOURCE REF",
 	Short: "add a new bundle",
 	Run:   runBundleAdd,
-}
-
-var cmdBundleUpdate = &cobra.Command{
-	Use:   "update",
-	Short: "update bundles",
-	Run:   runBundleUpdate,
 }
 
 func init() {
 	cmdRoot.AddCommand(cmdBundle)
 	cmdBundle.AddCommand(cmdBundleAdd)
 	cmdBundle.AddCommand(cmdBundleUpdate)
+	cmdBundle.AddCommand(cmdBundleRemove)
 }
 
 // BundleConfig is a list of bundles to manage.
@@ -43,6 +39,7 @@ type BundleConfig struct {
 type Bundle struct {
 	Source string
 	Ref    string
+	Commit string
 	Dir    string
 }
 
@@ -64,26 +61,45 @@ func saveBundleConfig(cfg BundleConfig) {
 	ok(ioutil.WriteFile(filepath.Join(opts.Base, "bundles.json"), buf, 0644))
 }
 
-// run executes cmd in opts.Base
-func run(cmd string, args ...string) {
+// run executes cmd in dir.
+func run(dir, cmd string, args ...string) {
 	v("run %q %q\n", cmd, args)
 	c := exec.Command(cmd, args...)
-	c.Dir = opts.Base
+	c.Dir = dir
 	c.Stderr = os.Stderr
 	c.Stdout = os.Stdout
 	ok(c.Run())
 }
 
-func addBundle(b Bundle) {
-	run("git", "-c", "fetch.fsckObjects=false",
-		"subtree", "add", "--squash", "--prefix",
-		b.Dir, b.Source, b.Ref)
+// run executes cmd in dir and returns what's printed on stdout.
+func runOutput(dir, cmd string, args ...string) string {
+	v("run %q %q\n", cmd, args)
+	c := exec.Command(cmd, args...)
+	c.Dir = dir
+	c.Stderr = os.Stderr
+	buf, err := c.Output()
+	ok(err)
+	return string(buf)
 }
 
-func updateBundle(b Bundle) {
-	run("git", "-c", "fetch.fsckObjects=false",
-		"subtree", "pull", "-q", "--squash",
-		"--prefix", b.Dir, b.Source, b.Ref)
+var cmdBundleUpdate = &cobra.Command{
+	Use:   "update [bundle] [...]",
+	Short: "update bundles",
+	Run:   runBundleUpdate,
+}
+
+func addBundle(b *Bundle) {
+	run(opts.Base, "git", "-c", "fetch.fsckObjects=false", "clone", b.Source, b.Dir)
+	bundleDir := filepath.Join(opts.Base, b.Dir)
+	run(bundleDir, "git", "checkout", b.Ref)
+	b.Commit = strings.TrimSpace(runOutput(bundleDir, "git", "rev-parse", "HEAD"))
+	ok(os.RemoveAll(filepath.Join(bundleDir, ".git")))
+}
+
+func updateBundle(b *Bundle) {
+	bundleDir := filepath.Join(opts.Base, b.Dir)
+	ok(os.RemoveAll(bundleDir))
+	addBundle(b)
 }
 
 func runBundleAdd(cmd *cobra.Command, args []string) {
@@ -102,15 +118,11 @@ func runBundleAdd(cmd *cobra.Command, args []string) {
 	cfg := loadBundleConfig()
 	bundle := Bundle{Dir: dir, Source: src, Ref: ref}
 
-	addBundle(bundle)
+	addBundle(&bundle)
 
 	cfg.Bundles = append(cfg.Bundles, bundle)
 
 	saveBundleConfig(cfg)
-
-	msg := fmt.Sprintf("Add bundle as %v\n\nSourced from %v (%v)\n", dir, src, ref)
-	run("git", "add", "bundles.json")
-	run("git", "commit", "--message", msg, "bundles.json")
 }
 
 func runBundleUpdate(cmd *cobra.Command, args []string) {
@@ -135,10 +147,42 @@ func runBundleUpdate(cmd *cobra.Command, args []string) {
 		}
 
 		if !exists(bundle.Dir) {
-			addBundle(bundle)
+			addBundle(&bundle)
 			continue
 		}
 
-		updateBundle(bundle)
+		updateBundle(&bundle)
 	}
+}
+
+var cmdBundleRemove = &cobra.Command{
+	Use:   "remove bundle [bundle] [...]",
+	Short: "remove bundles",
+	RunE:  runBundleRemove,
+}
+
+func runBundleRemove(cmd *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		return errors.Errorf("specify at least one bundle directory\n")
+	}
+
+	cfg := loadBundleConfig()
+
+	for _, dir := range args {
+		err := os.RemoveAll(filepath.Join(opts.Base, dir))
+		if err != nil {
+			return errors.Wrap(err, "RemoveAll")
+		}
+
+		for i, b := range cfg.Bundles {
+			if b.Dir == dir {
+				cfg.Bundles = append(cfg.Bundles[:i], cfg.Bundles[i+1:]...)
+				break
+			}
+		}
+	}
+
+	saveBundleConfig(cfg)
+
+	return nil
 }
