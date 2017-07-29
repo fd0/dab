@@ -278,6 +278,7 @@ func isSubdir(dir, subdir string) bool {
 	}
 }
 
+// State contains the state whether a bundle is installed or not.
 type State map[string]bool
 
 func installedModules() State {
