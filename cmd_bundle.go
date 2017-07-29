@@ -34,10 +34,12 @@ func init() {
 	cmdBundle.AddCommand(cmdBundleUpdate)
 }
 
+// BundleConfig is a list of bundles to manage.
 type BundleConfig struct {
 	Bundles []Bundle
 }
 
+// Bundle configures a bundle.
 type Bundle struct {
 	Source string
 	Ref    string
