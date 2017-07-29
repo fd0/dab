@@ -66,7 +66,7 @@ func init() {
 
 	fs := cmdRoot.PersistentFlags()
 	fs.StringVar(&opts.Target, "target", defaultTarget, "set target directory")
-	fs.StringVar(&opts.Base, "Base", findBasedir(), "set base directory")
+	fs.StringVar(&opts.Base, "base", findBasedir(), "set base directory")
 	fs.BoolVar(&opts.DryRun, "dry-run", false, "only print actions, do not execute them")
 	fs.BoolVar(&opts.Verbose, "verbose", false, "be verbose")
 }
