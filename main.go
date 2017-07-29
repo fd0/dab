@@ -65,7 +65,7 @@ func init() {
 
 	fs := cmdRoot.PersistentFlags()
 	fs.StringVar(&opts.Target, "target", defaultTarget, "set target directory")
-	fs.StringVar(&opts.Base, "base", findBasedir(), "set base directory")
+	fs.StringVar(&opts.Base, "base", "", "set base directory")
 	fs.BoolVar(&opts.DryRun, "dry-run", false, "only print actions, do not execute them")
 	fs.BoolVar(&opts.Verbose, "verbose", false, "be verbose")
 }
@@ -95,6 +95,15 @@ func warn(s string, args ...interface{}) {
 }
 
 func main() {
+	if opts.Base == "" {
+		opts.Base = findBasedir()
+	}
+
+	if opts.Base == "" {
+		fmt.Fprintf(os.Stderr, "unable to find basedir\n")
+		os.Exit(2)
+	}
+
 	err := cmdRoot.Execute()
 	var exitCode int
 	if err != nil {
