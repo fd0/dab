@@ -7,7 +7,32 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/spf13/cobra"
 )
+
+var cmdBundle = &cobra.Command{
+	Use:   "bundle",
+	Short: "manage bundles",
+}
+
+var cmdBundleAdd = &cobra.Command{
+	Use:   "add",
+	Short: "add a new bundle",
+	Run:   runBundleAdd,
+}
+
+var cmdBundleUpdate = &cobra.Command{
+	Use:   "update",
+	Short: "update bundles",
+	Run:   runBundleUpdate,
+}
+
+func init() {
+	cmdRoot.AddCommand(cmdBundle)
+	cmdBundle.AddCommand(cmdBundleAdd)
+	cmdBundle.AddCommand(cmdBundleUpdate)
+}
 
 type BundleConfig struct {
 	Bundles []Bundle
@@ -37,20 +62,6 @@ func saveBundleConfig(cfg BundleConfig) {
 	ok(ioutil.WriteFile(filepath.Join(opts.Base, "bundles.json"), buf, 0644))
 }
 
-func cmdBundle(args []string) {
-	if len(args) == 0 {
-		warn("usage: bundle [add|update]\n")
-		os.Exit(1)
-	}
-
-	switch args[0] {
-	case "add":
-		cmdBundleAdd(args[1:])
-	case "update":
-		cmdBundleUpdate(args[1:])
-	}
-}
-
 // run executes cmd in opts.Base
 func run(cmd string, args ...string) {
 	v("run %q %q\n", cmd, args)
@@ -73,7 +84,7 @@ func updateBundle(b Bundle) {
 		"--prefix", b.Dir, b.Source, b.Ref)
 }
 
-func cmdBundleAdd(args []string) {
+func runBundleAdd(cmd *cobra.Command, args []string) {
 	if len(args) < 2 || len(args) > 3 {
 		warn("usage: bundle add DIR SRC REF\n")
 		os.Exit(1)
@@ -100,7 +111,7 @@ func cmdBundleAdd(args []string) {
 	run("git", "commit", "--message", msg, "bundles.json")
 }
 
-func cmdBundleUpdate(args []string) {
+func runBundleUpdate(cmd *cobra.Command, args []string) {
 	updateModules := make(map[string]bool)
 	if len(args) > 0 {
 		for _, dir := range args {
