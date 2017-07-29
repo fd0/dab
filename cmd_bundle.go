@@ -20,7 +20,7 @@ type Bundle struct {
 }
 
 func loadBundleConfig() BundleConfig {
-	buf, err := ioutil.ReadFile(filepath.Join(opts.basedir, "bundles.json"))
+	buf, err := ioutil.ReadFile(filepath.Join(opts.Base, "bundles.json"))
 	if os.IsNotExist(err) {
 		return BundleConfig{}
 	}
@@ -34,7 +34,7 @@ func loadBundleConfig() BundleConfig {
 func saveBundleConfig(cfg BundleConfig) {
 	buf, err := json.MarshalIndent(cfg, "", "  ")
 	ok(err)
-	ok(ioutil.WriteFile(filepath.Join(opts.basedir, "bundles.json"), buf, 0644))
+	ok(ioutil.WriteFile(filepath.Join(opts.Base, "bundles.json"), buf, 0644))
 }
 
 func cmdBundle(args []string) {
@@ -51,11 +51,11 @@ func cmdBundle(args []string) {
 	}
 }
 
-// run executes cmd in opts.basedir
+// run executes cmd in opts.Base
 func run(cmd string, args ...string) {
 	v("run %q %q\n", cmd, args)
 	c := exec.Command(cmd, args...)
-	c.Dir = opts.basedir
+	c.Dir = opts.Base
 	c.Stderr = os.Stderr
 	c.Stdout = os.Stdout
 	ok(c.Run())
