@@ -93,10 +93,12 @@ func addBundle(b *Bundle) {
 	bundleDir := filepath.Join(opts.Base, b.Dir)
 	run(bundleDir, "git", "checkout", b.Ref)
 	b.Commit = strings.TrimSpace(runOutput(bundleDir, "git", "rev-parse", "HEAD"))
+	v("bundle %v is at %v\n", b.Dir, b.Commit)
 	ok(os.RemoveAll(filepath.Join(bundleDir, ".git")))
 }
 
 func updateBundle(b *Bundle) {
+	v("update bundle %v\n", b.Dir)
 	bundleDir := filepath.Join(opts.Base, b.Dir)
 	ok(os.RemoveAll(bundleDir))
 	addBundle(b)
