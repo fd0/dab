@@ -128,6 +128,7 @@ func runBundleAdd(cmd *cobra.Command, args []string) {
 }
 
 func runBundleUpdate(cmd *cobra.Command, args []string) {
+	v("runUpdateBundle\n")
 	updateModules := make(map[string]bool)
 	if len(args) > 0 {
 		for _, dir := range args {
@@ -138,7 +139,7 @@ func runBundleUpdate(cmd *cobra.Command, args []string) {
 	}
 
 	cfg := loadBundleConfig()
-	for _, bundle := range cfg.Bundles {
+	for i, bundle := range cfg.Bundles {
 		allowed, ok := updateModules[bundle.Dir]
 		if !ok {
 			allowed = updateModules[""]
@@ -148,13 +149,17 @@ func runBundleUpdate(cmd *cobra.Command, args []string) {
 			continue
 		}
 
-		if !exists(bundle.Dir) {
+		v("testing if %v exists\n", bundle.Dir)
+		if !exists(filepath.Join(opts.Base, bundle.Dir)) {
 			addBundle(&bundle)
 			continue
 		}
 
 		updateBundle(&bundle)
+		cfg.Bundles[i] = bundle
 	}
+
+	saveBundleConfig(cfg)
 }
 
 var cmdBundleRemove = &cobra.Command{
