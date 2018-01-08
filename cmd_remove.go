@@ -31,7 +31,9 @@ var cmdRemove = &cobra.Command{
 
 			for _, dir := range args {
 				if isSubdir(dir, target) {
-					ok(os.Remove(filename))
+					if !opts.DryRun {
+						ok(os.Remove(filename))
+					}
 					v("removed %v\n", filename)
 					break
 				}
