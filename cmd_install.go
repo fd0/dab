@@ -199,7 +199,6 @@ func runInstall(cmd *cobra.Command, args []string) {
 		// install all modules
 		for _, module := range subdirs(opts.Base) {
 			install(module, opts.Target)
-			install(module+"_"+hostname, opts.Target)
 			if exists(filepath.Join(opts.Base, module+"_"+hostname)) {
 				install(module+"_"+hostname, opts.Target)
 			}
@@ -211,6 +210,9 @@ func runInstall(cmd *cobra.Command, args []string) {
 	for _, module := range args {
 		// install all modules
 		install(module, opts.Target)
+		if exists(filepath.Join(opts.Base, module+"_"+hostname)) {
+			install(module+"_"+hostname, opts.Target)
+		}
 	}
 }
 
