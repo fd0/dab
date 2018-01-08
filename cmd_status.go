@@ -11,7 +11,7 @@ import (
 
 var cmdStatus = &cobra.Command{
 	Use:   "status",
-	Short: "displays the status of all bundles",
+	Short: "displays the status of all modules",
 	Run: func(*cobra.Command, []string) {
 		state := currentState()
 		keys := make([]string, 0, len(state))
@@ -37,7 +37,7 @@ func init() {
 	cmdRoot.AddCommand(cmdStatus)
 }
 
-// State contains the state whether a bundle is installed or not.
+// State contains the state whether a module is installed or not.
 type State map[string]bool
 
 func firstdir(dir string) string {

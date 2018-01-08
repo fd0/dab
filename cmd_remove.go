@@ -12,7 +12,7 @@ type ModuleWalkFunc func(filename, target string, fi os.FileInfo, err error) err
 
 var cmdRemove = &cobra.Command{
 	Use:   "remove",
-	Short: "unistall bundles",
+	Short: "unistall modules",
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) == 0 {
 			args = append(args, "")

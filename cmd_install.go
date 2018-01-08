@@ -9,7 +9,7 @@ import (
 
 var cmdInstall = &cobra.Command{
 	Use:   "install",
-	Short: "install bundles",
+	Short: "install modules",
 	Run:   runInstall,
 }
 
