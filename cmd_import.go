@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -69,4 +70,38 @@ func runImport(cmd *cobra.Command, args []string) {
 	ok(os.Rename(src, dst))
 	v("creating symlink to %q in %q\n", dst, filepath.Dir(src))
 	ok(os.Symlink(dst, filepath.Dir(src)))
+
+	_, err = os.Stat(filepath.Join(dst, ".git"))
+	if os.IsNotExist(err) {
+		return
+	}
+	ok(err)
+	v("%s seems to be a Git repository, adding it to bundles\n", dst)
+	bundle := Bundle{
+		Dir:    dst,
+		Ref:    strings.TrimSpace(runOutput(dst, "git", "rev-parse", "--abbrev-ref", "HEAD")),
+		Commit: strings.TrimSpace(runOutput(dst, "git", "rev-parse", "HEAD")),
+	}
+	remotes := strings.Split(strings.TrimSpace(runOutput(dst, "git", "remote")), "\n")
+	var r string
+	switch len(remotes) {
+	case 0:
+		v("no remote known, giving up")
+		return
+	case 1:
+		r = remotes[0]
+	default:
+		// find 'origin', if it does not exists, take the first one
+		for i := len(remotes) - 1; i >= 0; i-- {
+			r = remotes[i]
+			if remotes[i] == "origin" {
+				break
+			}
+		}
+	}
+	bundle.Source = strings.TrimSpace(runOutput(dst, "git", "remote", "get-url", r))
+	cfg := loadBundleConfig()
+	cfg.Bundles = append(cfg.Bundles, bundle)
+	saveBundleConfig(cfg)
+	ok(os.RemoveAll(filepath.Join(dst, ".git")))
 }
