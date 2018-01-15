@@ -69,7 +69,7 @@ func runImport(cmd *cobra.Command, args []string) {
 	v("moving %q to %q\n", src, dst)
 	ok(os.Rename(src, dst))
 	v("creating symlink to %q in %q\n", dst, filepath.Dir(src))
-	ok(os.Symlink(dst, filepath.Dir(src)))
+	link(dst, filepath.Dir(src))
 
 	_, err = os.Stat(filepath.Join(dst, ".git"))
 	if os.IsNotExist(err) {
