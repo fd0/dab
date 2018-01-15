@@ -34,6 +34,14 @@ func runImport(cmd *cobra.Command, args []string) {
 	}
 
 	src, module := args[0], args[1]
+	if !filepath.IsAbs(src) {
+		s, err := filepath.Abs(src)
+		if err != nil {
+			warn("unable to find absolute path for %v: %v\n", src, err)
+		} else {
+			src = s
+		}
+	}
 
 	if !exists(src) {
 		warn("%s: does not exist\n", src)
