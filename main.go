@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -38,9 +39,12 @@ var cmdRoot = &cobra.Command{
 	SilenceErrors: true,
 	SilenceUsage:  true,
 
-	PreRunE: func(cmd *cobra.Command, args []string) error {
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		if globalOpts.Base == "" {
-			globalOpts.Base = findBasedir()
+			globalOpts.Base, err = findBasedir()
+			if err != nil {
+				return err
+			}
 		}
 
 		if globalOpts.Base == "" {
@@ -51,7 +55,7 @@ var cmdRoot = &cobra.Command{
 	},
 }
 
-func findBasedir() string {
+func findBasedir() (string, error) {
 	exe := os.Args[0]
 
 	dir, err := filepath.Abs(filepath.Dir(exe))
@@ -68,15 +72,14 @@ func findBasedir() string {
 
 	for {
 		if filepath.Dir(dir) == dir {
-			warn("unable to find bundles.json, pass base directory with `--base`\n")
-			os.Exit(1)
+			return "", errors.New("unable to find bundles.json, pass base directory with `--base`")
 		}
 
 		filename := filepath.Join(dir, "bundles.json")
 		fi, err = os.Stat(filename)
 		if err == nil {
 			v("found basedir: %v\n", dir)
-			return dir
+			return dir, nil
 		}
 
 		if err != nil && os.IsNotExist(err) {
