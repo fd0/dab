@@ -11,7 +11,9 @@ import (
 var cmdImport = &cobra.Command{
 	Use:   "import FILE|DIR MODULE",
 	Short: "import existing files and directories into a given module",
-	Run:   runImport,
+	Run: func(cmd *cobra.Command, args []string) {
+		runImport(cmd, globalOpts, args)
+	},
 }
 
 func init() {
@@ -26,7 +28,7 @@ func pathIsSymlink(path string) bool {
 	return isSymlink(fi)
 }
 
-func runImport(cmd *cobra.Command, args []string) {
+func runImport(cmd *cobra.Command, opts GlobalOptions, args []string) {
 	v("runImport\n")
 	if len(args) != 2 {
 		warn("usage: bundle add FILE|DIR MODULE\n")
@@ -49,7 +51,7 @@ func runImport(cmd *cobra.Command, args []string) {
 	}
 
 	if pathIsSymlink(src) {
-		warn("%s: already a symlink, not importing\n")
+		warn("%s: already a symlink, not importing\n", src)
 		os.Exit(2)
 	}
 
@@ -77,7 +79,9 @@ func runImport(cmd *cobra.Command, args []string) {
 	v("moving %q to %q\n", src, dst)
 	ok(os.Rename(src, dst))
 	v("creating symlink to %q in %q\n", dst, filepath.Dir(src))
-	link(dst, filepath.Dir(src))
+
+	installOpts = InstallOptions{global: opts}
+	link(installOpts, dst, filepath.Dir(src))
 
 	_, err = os.Stat(filepath.Join(dst, ".git"))
 	if os.IsNotExist(err) {
@@ -108,8 +112,8 @@ func runImport(cmd *cobra.Command, args []string) {
 		}
 	}
 	bundle.Source = strings.TrimSpace(runOutput(dst, "git", "remote", "get-url", r))
-	cfg := loadBundleConfig()
+	cfg := loadBundleConfig(opts.Base)
 	cfg.Bundles = append(cfg.Bundles, bundle)
-	saveBundleConfig(cfg)
+	saveBundleConfig(opts.Base, cfg)
 	ok(os.RemoveAll(filepath.Join(dst, ".git")))
 }

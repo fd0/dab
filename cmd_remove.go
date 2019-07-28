@@ -19,19 +19,19 @@ var cmdRemove = &cobra.Command{
 		}
 
 		for i := range args {
-			args[i] = filepath.Join(opts.Base, args[i])
+			args[i] = filepath.Join(globalOpts.Base, args[i])
 		}
 
 		v("removing base dirs %v\n", args)
 
-		walkOurSymlinks(opts.Base, opts.Target, func(filename, target string, fi os.FileInfo, err error) error {
+		walkOurSymlinks(globalOpts.Base, globalOpts.Target, func(filename, target string, fi os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
 
 			for _, dir := range args {
 				if isSubdir(dir, target) {
-					if !opts.DryRun {
+					if !globalOpts.DryRun {
 						ok(os.Remove(filename))
 					}
 					v("removed %v\n", filename)
@@ -48,8 +48,8 @@ func init() {
 	cmdRoot.AddCommand(cmdRemove)
 }
 
-func walkOurSymlinks(base, dir string, fn ModuleWalkFunc) {
-	ok(filepath.Walk(opts.Target, func(filename string, fi os.FileInfo, err error) error {
+func walkOurSymlinks(base, target string, fn ModuleWalkFunc) {
+	ok(filepath.Walk(target, func(filename string, fi os.FileInfo, err error) error {
 		if err != nil {
 			v("error checking %v: %v\n", filename, err)
 			return nil

@@ -8,6 +8,30 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type GlobalOptions struct {
+	DryRun  bool
+	Verbose bool
+	Debug   bool
+	Target  string
+	Base    string
+}
+
+var globalOpts GlobalOptions
+
+func init() {
+	defaultTarget := os.Getenv("TARGET")
+	if defaultTarget == "" {
+		defaultTarget = os.Getenv("HOME")
+	}
+
+	fs := cmdRoot.PersistentFlags()
+	fs.StringVar(&globalOpts.Target, "target", defaultTarget, "set target directory")
+	fs.StringVar(&globalOpts.Base, "base", "", "set base directory")
+	fs.BoolVar(&globalOpts.DryRun, "dry-run", false, "only print actions, do not execute them")
+	fs.BoolVar(&globalOpts.Verbose, "verbose", false, "be verbose")
+	fs.BoolVar(&globalOpts.Debug, "debug", false, "print debugging information")
+}
+
 var cmdRoot = &cobra.Command{
 	Use:           "dab",
 	Short:         "manage dotfiles and bundles",
@@ -15,24 +39,17 @@ var cmdRoot = &cobra.Command{
 	SilenceUsage:  true,
 
 	PreRunE: func(cmd *cobra.Command, args []string) error {
-		if opts.Base == "" {
-			opts.Base = findBasedir()
+		if globalOpts.Base == "" {
+			globalOpts.Base = findBasedir()
 		}
 
-		if opts.Base == "" {
+		if globalOpts.Base == "" {
 			return fmt.Errorf("unable to find basedir")
 		}
 
 		return nil
 	},
 }
-
-var opts = struct {
-	DryRun  bool
-	Verbose bool
-	Target  string
-	Base    string
-}{}
 
 func findBasedir() string {
 	exe := os.Args[0]
@@ -47,9 +64,11 @@ func findBasedir() string {
 		dir = readlink(exe)
 	}
 
+	v("looking for basedir in %v\n", dir)
+
 	for {
 		if filepath.Dir(dir) == dir {
-			warn("unable to find bundles.json\n")
+			warn("unable to find bundles.json, pass base directory with `--base`\n")
 			os.Exit(1)
 		}
 
@@ -69,19 +88,6 @@ func findBasedir() string {
 	}
 }
 
-func init() {
-	defaultTarget := os.Getenv("TARGET")
-	if defaultTarget == "" {
-		defaultTarget = os.Getenv("HOME")
-	}
-
-	fs := cmdRoot.PersistentFlags()
-	fs.StringVar(&opts.Target, "target", defaultTarget, "set target directory")
-	fs.StringVar(&opts.Base, "base", "", "set base directory")
-	fs.BoolVar(&opts.DryRun, "dry-run", false, "only print actions, do not execute them")
-	fs.BoolVar(&opts.Verbose, "verbose", false, "be verbose")
-}
-
 func ok(err error) {
 	if err == nil {
 		return
@@ -92,7 +98,14 @@ func ok(err error) {
 }
 
 func v(s string, args ...interface{}) {
-	if !opts.Verbose {
+	if !globalOpts.Verbose {
+		return
+	}
+	fmt.Printf(s, args...)
+}
+
+func d(s string, args ...interface{}) {
+	if !globalOpts.Debug {
 		return
 	}
 	fmt.Printf(s, args...)

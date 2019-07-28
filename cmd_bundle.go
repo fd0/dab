@@ -20,7 +20,9 @@ var cmdBundle = &cobra.Command{
 var cmdBundleAdd = &cobra.Command{
 	Use:   "add DIR SOURCE REF",
 	Short: "add a new bundle",
-	Run:   runBundleAdd,
+	Run: func(cmd *cobra.Command, args []string) {
+		runBundleAdd(cmd, globalOpts, args)
+	},
 }
 
 func init() {
@@ -43,8 +45,8 @@ type Bundle struct {
 	Dir    string
 }
 
-func loadBundleConfig() BundleConfig {
-	buf, err := ioutil.ReadFile(filepath.Join(opts.Base, "bundles.json"))
+func loadBundleConfig(base string) BundleConfig {
+	buf, err := ioutil.ReadFile(filepath.Join(base, "bundles.json"))
 	if os.IsNotExist(err) {
 		return BundleConfig{}
 	}
@@ -55,10 +57,10 @@ func loadBundleConfig() BundleConfig {
 	return cfg
 }
 
-func saveBundleConfig(cfg BundleConfig) {
+func saveBundleConfig(base string, cfg BundleConfig) {
 	buf, err := json.MarshalIndent(cfg, "", "  ")
 	ok(err)
-	ok(ioutil.WriteFile(filepath.Join(opts.Base, "bundles.json"), buf, 0644))
+	ok(ioutil.WriteFile(filepath.Join(base, "bundles.json"), buf, 0644))
 }
 
 // run executes cmd in dir.
@@ -85,26 +87,28 @@ func runOutput(dir, cmd string, args ...string) string {
 var cmdBundleUpdate = &cobra.Command{
 	Use:   "update [bundle] [...]",
 	Short: "update bundles",
-	Run:   runBundleUpdate,
+	Run: func(cmd *cobra.Command, args []string) {
+		runBundleUpdate(cmd, globalOpts, args)
+	},
 }
 
-func addBundle(b *Bundle) {
-	run(opts.Base, "git", "-c", "fetch.fsckObjects=false", "clone", b.Source, b.Dir)
-	bundleDir := filepath.Join(opts.Base, b.Dir)
+func addBundle(base string, b *Bundle) {
+	run(base, "git", "-c", "fetch.fsckObjects=false", "clone", b.Source, b.Dir)
+	bundleDir := filepath.Join(base, b.Dir)
 	run(bundleDir, "git", "checkout", b.Ref)
 	b.Commit = strings.TrimSpace(runOutput(bundleDir, "git", "rev-parse", "HEAD"))
 	v("bundle %v is at %v\n", b.Dir, b.Commit)
 	ok(os.RemoveAll(filepath.Join(bundleDir, ".git")))
 }
 
-func updateBundle(b *Bundle) {
+func updateBundle(base string, b *Bundle) {
 	v("update bundle %v\n", b.Dir)
-	bundleDir := filepath.Join(opts.Base, b.Dir)
+	bundleDir := filepath.Join(base, b.Dir)
 	ok(os.RemoveAll(bundleDir))
-	addBundle(b)
+	addBundle(base, b)
 }
 
-func runBundleAdd(cmd *cobra.Command, args []string) {
+func runBundleAdd(cmd *cobra.Command, opts GlobalOptions, args []string) {
 	if len(args) < 2 || len(args) > 3 {
 		warn("usage: bundle add DIR SRC REF\n")
 		os.Exit(1)
@@ -117,17 +121,17 @@ func runBundleAdd(cmd *cobra.Command, args []string) {
 
 	dir, src, ref := args[0], args[1], args[2]
 
-	cfg := loadBundleConfig()
+	cfg := loadBundleConfig(opts.Base)
 	bundle := Bundle{Dir: dir, Source: src, Ref: ref}
 
-	addBundle(&bundle)
+	addBundle(opts.Base, &bundle)
 
 	cfg.Bundles = append(cfg.Bundles, bundle)
 
-	saveBundleConfig(cfg)
+	saveBundleConfig(opts.Base, cfg)
 }
 
-func runBundleUpdate(cmd *cobra.Command, args []string) {
+func runBundleUpdate(cmd *cobra.Command, opts GlobalOptions, args []string) {
 	v("runUpdateBundle\n")
 	updateModules := make(map[string]bool)
 	if len(args) > 0 {
@@ -138,7 +142,7 @@ func runBundleUpdate(cmd *cobra.Command, args []string) {
 		updateModules[""] = true
 	}
 
-	cfg := loadBundleConfig()
+	cfg := loadBundleConfig(opts.Base)
 	for i, bundle := range cfg.Bundles {
 		allowed, ok := updateModules[bundle.Dir]
 		if !ok {
@@ -151,29 +155,31 @@ func runBundleUpdate(cmd *cobra.Command, args []string) {
 
 		v("testing if %v exists\n", bundle.Dir)
 		if !exists(filepath.Join(opts.Base, bundle.Dir)) {
-			addBundle(&bundle)
+			addBundle(opts.Base, &bundle)
 			continue
 		}
 
-		updateBundle(&bundle)
+		updateBundle(opts.Base, &bundle)
 		cfg.Bundles[i] = bundle
 	}
 
-	saveBundleConfig(cfg)
+	saveBundleConfig(opts.Base, cfg)
 }
 
 var cmdBundleRemove = &cobra.Command{
 	Use:   "remove bundle [bundle] [...]",
 	Short: "remove bundles",
-	RunE:  runBundleRemove,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runBundleRemove(cmd, globalOpts, args)
+	},
 }
 
-func runBundleRemove(cmd *cobra.Command, args []string) error {
+func runBundleRemove(cmd *cobra.Command, opts GlobalOptions, args []string) error {
 	if len(args) == 0 {
 		return errors.Errorf("specify at least one bundle directory\n")
 	}
 
-	cfg := loadBundleConfig()
+	cfg := loadBundleConfig(opts.Base)
 
 	for _, dir := range args {
 		err := os.RemoveAll(filepath.Join(opts.Base, dir))
@@ -189,7 +195,7 @@ func runBundleRemove(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	saveBundleConfig(cfg)
+	saveBundleConfig(opts.Base, cfg)
 
 	return nil
 }

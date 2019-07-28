@@ -13,7 +13,7 @@ var cmdStatus = &cobra.Command{
 	Use:   "status",
 	Short: "displays the status of all modules",
 	Run: func(*cobra.Command, []string) {
-		state := currentState()
+		state := currentState(globalOpts.Base, globalOpts.Target)
 		keys := make([]string, 0, len(state))
 		for name := range state {
 			keys = append(keys, name)
@@ -45,14 +45,14 @@ func firstdir(dir string) string {
 	return dirs[0]
 }
 
-func installedModules() State {
+func installedModules(base, target string) State {
 	state := make(State)
-	walkOurSymlinks(opts.Base, opts.Target, func(filename, target string, fi os.FileInfo, err error) error {
+	walkOurSymlinks(base, target, func(filename, dir string, fi os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 
-		rel, err := filepath.Rel(opts.Base, target)
+		rel, err := filepath.Rel(base, dir)
 		if err != nil {
 			return err
 		}
@@ -66,17 +66,17 @@ func installedModules() State {
 	return state
 }
 
-func allModules() (modules []string) {
-	for _, dir := range subdirs(opts.Base) {
+func allModules(base string) (modules []string) {
+	for _, dir := range subdirs(base) {
 		module := filepath.Base(dir)
 		modules = append(modules, module)
 	}
 	return modules
 }
 
-func currentState() State {
-	state := installedModules()
-	for _, module := range allModules() {
+func currentState(base, target string) State {
+	state := installedModules(base, target)
+	for _, module := range allModules(base) {
 		if _, ok := state[module]; !ok {
 			state[module] = false
 		}

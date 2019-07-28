@@ -7,14 +7,26 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var cmdInstall = &cobra.Command{
-	Use:   "install",
-	Short: "install modules",
-	Run:   runInstall,
+type InstallOptions struct {
+	global       GlobalOptions
+	DisableCheck bool
 }
+
+var installOpts InstallOptions
 
 func init() {
 	cmdRoot.AddCommand(cmdInstall)
+	cmdInstall.Flags().BoolVar(&installOpts.DisableCheck, "disable-check", false, "don't check for broken symlinks on install")
+}
+
+var cmdInstall = &cobra.Command{
+	Use:   "install",
+	Short: "install modules",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		opts := installOpts
+		opts.global = globalOpts
+		return runInstall(cmd, opts, args)
+	},
 }
 
 func readdir(dir string) []os.FileInfo {
@@ -60,15 +72,15 @@ func exists(name string) bool {
 }
 
 // linkDirContents links all entries in srcdir to dstdir.
-func linkDirContents(srcdir, dstdir string) {
+func linkDirContents(opts InstallOptions, srcdir, dstdir string) {
 	for _, entry := range readdir(srcdir) {
-		link(filepath.Join(srcdir, entry.Name()), dstdir)
+		link(opts, filepath.Join(srcdir, entry.Name()), dstdir)
 	}
 }
 
 // resolveConflict resolves a conflict where two sources (src1 exists, src2 not
 // yet) are to be linked to the name dst.
-func resolveConflict(src1, src2, dst string) {
+func resolveConflict(opts InstallOptions, src1, src2, dst string) {
 	v("resolve conflict for %v:\n  %v\n  %v\n", dst, src1, src2)
 	if !isDir(src1) {
 		warn("unable to resolve conflict for %v: source %v is not a directory\n", dst, src1)
@@ -85,14 +97,14 @@ func resolveConflict(src1, src2, dst string) {
 	ok(os.Mkdir(dst, 0755))
 
 	// then link the file separately
-	linkDirContents(src1, dst)
-	linkDirContents(src2, dst)
+	linkDirContents(opts, src1, dst)
+	linkDirContents(opts, src2, dst)
 
 	v("conflict for %v resolved\n", dst)
 }
 
 // link creates a symlink to the file/dir src in targetdir.
-func link(src, targetdir string) {
+func link(opts InstallOptions, src, targetdir string) {
 	base := filepath.Base(src)
 	if len(base) == 0 {
 		warn("invalid item name %v, skipping\n", src)
@@ -110,7 +122,7 @@ func link(src, targetdir string) {
 
 		if fi.IsDir() {
 			v("%v exists, descending into %v\n", dst, src)
-			linkDirContents(src, dst)
+			linkDirContents(opts, src, dst)
 			return
 		}
 
@@ -120,13 +132,13 @@ func link(src, targetdir string) {
 			// nothing to do, dst already points to src
 			return
 
-		case isSubdir(opts.Base, readlink(dst)):
-			resolveConflict(linkTarget, src, dst)
+		case isSubdir(opts.global.Base, readlink(dst)):
+			resolveConflict(opts, linkTarget, src, dst)
 			return
 
 		case exists(dst) && isDir(dst):
 			v("descending into %v\n", linkTarget)
-			linkDirContents(src, dst)
+			linkDirContents(opts, src, dst)
 			return
 
 		case exists(dst):
@@ -135,24 +147,24 @@ func link(src, targetdir string) {
 
 		default:
 			v("removing dangling symlink\n")
-			if !opts.DryRun {
+			if !opts.global.DryRun {
 				ok(os.Remove(dst))
 			}
 		}
 	}
 
 	v("link %v -> %v\n", src, dst)
-	if !opts.DryRun {
+	if !opts.global.DryRun {
 		ok(os.Symlink(src, dst))
 	}
 }
 
-func install(moduleName, targetdir string) {
+func install(opts InstallOptions, moduleName, targetdir string) {
 	if moduleName == "" {
 		return
 	}
 
-	modulePath := filepath.Join(opts.Base, moduleName)
+	modulePath := filepath.Join(opts.global.Base, moduleName)
 
 	v("install %v\n", moduleName)
 	if !exists(modulePath) {
@@ -160,14 +172,17 @@ func install(moduleName, targetdir string) {
 		return
 	}
 
-	linkDirContents(modulePath, targetdir)
+	linkDirContents(opts, modulePath, targetdir)
 }
 
-func cleanupBrokenLinks() {
-	walkOurSymlinks(opts.Base, opts.Target, func(filename, target string, fi os.FileInfo, err error) error {
+func cleanupBrokenLinks(opts InstallOptions) {
+	v("looking for broken symlinks (disable with `--disable-check`)...")
+	defer v(" done\n")
+	walkOurSymlinks(opts.global.Base, opts.global.Target, func(filename, target string, fi os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
+		d("check symlink %v\n", target)
 
 		// if the target exists, do nothing
 		if exists(target) {
@@ -179,41 +194,48 @@ func cleanupBrokenLinks() {
 	})
 }
 
-func runInstall(cmd *cobra.Command, args []string) {
+func runInstall(cmd *cobra.Command, opts InstallOptions, args []string) error {
+	v("run install\n")
 	hostname, err := os.Hostname()
-	ok(err)
+	if err != nil {
+		return err
+	}
 
-	cleanupBrokenLinks()
+	if !opts.DisableCheck {
+		cleanupBrokenLinks(opts)
+	}
 
 	if len(args) == 0 {
 		// install only the base module
-		install("base", opts.Target)
+		install(opts, "base", opts.global.Target)
 
-		if exists(filepath.Join(opts.Base, "base_"+hostname)) {
-			install("base_"+hostname, opts.Target)
+		if exists(filepath.Join(opts.global.Base, "base_"+hostname)) {
+			install(opts, "base_"+hostname, opts.global.Target)
 		}
-		return
+		return nil
 	}
 
 	if args[0] == "all" {
 		// install all modules
-		for _, module := range subdirs(opts.Base) {
-			install(module, opts.Target)
-			if exists(filepath.Join(opts.Base, module+"_"+hostname)) {
-				install(module+"_"+hostname, opts.Target)
+		for _, module := range subdirs(opts.global.Base) {
+			install(opts, module, opts.global.Target)
+			if exists(filepath.Join(opts.global.Base, module+"_"+hostname)) {
+				install(opts, module+"_"+hostname, opts.global.Target)
 			}
 		}
-		return
+		return nil
 	}
 
 	// otherwise install the listed modules
 	for _, module := range args {
 		// install all modules
-		install(module, opts.Target)
-		if exists(filepath.Join(opts.Base, module+"_"+hostname)) {
-			install(module+"_"+hostname, opts.Target)
+		install(opts, module, opts.global.Target)
+		if exists(filepath.Join(opts.global.Base, module+"_"+hostname)) {
+			install(opts, module+"_"+hostname, opts.global.Target)
 		}
 	}
+
+	return nil
 }
 
 func readlink(file string) string {
