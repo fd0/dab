@@ -13,6 +13,18 @@ var cmdRoot = &cobra.Command{
 	Short:         "manage dotfiles and bundles",
 	SilenceErrors: true,
 	SilenceUsage:  true,
+
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		if opts.Base == "" {
+			opts.Base = findBasedir()
+		}
+
+		if opts.Base == "" {
+			return fmt.Errorf("unable to find basedir")
+		}
+
+		return nil
+	},
 }
 
 var opts = struct {
@@ -95,15 +107,6 @@ func warn(s string, args ...interface{}) {
 }
 
 func main() {
-	if opts.Base == "" {
-		opts.Base = findBasedir()
-	}
-
-	if opts.Base == "" {
-		fmt.Fprintf(os.Stderr, "unable to find basedir\n")
-		os.Exit(2)
-	}
-
 	err := cmdRoot.Execute()
 	var exitCode int
 	if err != nil {
